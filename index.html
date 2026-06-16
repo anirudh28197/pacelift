@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Fitness Tracker</title>
+<meta name="theme-color" content="#0b3d2e" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div id="loginView" class="view">
+    <div class="login-card">
+      <h1>🏋️ Fitness Tracker</h1>
+      <p class="subtitle">Log in to track your lifts and runs.</p>
+      <form id="loginForm">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" required autocomplete="email" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="primary-btn" id="loginBtn">Log In</button>
+      </form>
+      <div class="status" id="loginStatus"></div>
+    </div>
+  </div>
+
+  <div id="appView" class="view hidden">
+    <header class="app-header">
+      <h1>🏋️ Fitness Tracker</h1>
+      <button id="logoutBtn" class="icon-btn" title="Log out" type="button">⎋</button>
+    </header>
+
+    <main id="mainContent">
+      <section id="strengthTab" class="tab-panel"></section>
+      <section id="runsTab" class="tab-panel hidden"></section>
+      <section id="analyticsTab" class="tab-panel hidden"></section>
+      <section id="recommendationsTab" class="tab-panel hidden"></section>
+    </main>
+
+    <nav class="tab-bar">
+      <button class="tab-btn active" data-tab="strengthTab" type="button">
+        <span class="tab-icon">💪</span><span>Strength</span>
+      </button>
+      <button class="tab-btn" data-tab="runsTab" type="button">
+        <span class="tab-icon">🏃</span><span>Runs</span>
+      </button>
+      <button class="tab-btn" data-tab="analyticsTab" type="button">
+        <span class="tab-icon">📊</span><span>Analytics</span>
+      </button>
+      <button class="tab-btn" data-tab="recommendationsTab" type="button">
+        <span class="tab-icon">💡</span><span>Tips</span>
+      </button>
+    </nav>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
