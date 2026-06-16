@@ -40,3 +40,29 @@ export async function getExerciseList(muscleGroup) {
   const custom = await getCustomExercises(muscleGroup);
   return [...DEFAULT_EXERCISES[muscleGroup], ...custom];
 }
+
+export async function getCustomExercisesWithIds(muscleGroup) {
+  const { data, error } = await supabase
+    .from("custom_exercises")
+    .select("id, name")
+    .eq("muscle_group", muscleGroup)
+    .order("name");
+  if (error) throw error;
+  return data;
+}
+
+export async function renameCustomExercise(id, oldName, newName, muscleGroup) {
+  const userId = await getUserId();
+  const { error: e1 } = await supabase
+    .from("custom_exercises")
+    .update({ name: newName })
+    .eq("id", id);
+  if (e1) throw e1;
+  const { error: e2 } = await supabase
+    .from("lift_sets")
+    .update({ exercise_name: newName })
+    .eq("user_id", userId)
+    .eq("muscle_group", muscleGroup)
+    .eq("exercise_name", oldName);
+  if (e2) throw e2;
+}

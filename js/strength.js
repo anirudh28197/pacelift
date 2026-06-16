@@ -4,6 +4,8 @@ import {
   MUSCLE_GROUP_LABELS,
   getExerciseList,
   addCustomExercise,
+  getCustomExercisesWithIds,
+  renameCustomExercise,
 } from "./exercises.js";
 import { todayStr, escapeHtml } from "./utils.js";
 
@@ -60,6 +62,12 @@ async function render() {
       <h3>History</h3>
       <div id="liftHistory"><p class="muted">Loading...</p></div>
     </div>
+
+    <div class="card">
+      <h3>Custom exercises</h3>
+      <div id="customExercisesManager"><p class="muted">Loading...</p></div>
+      <div class="status" id="renameStatus"></div>
+    </div>
   `;
 
   container.querySelectorAll(".subtab-btn").forEach((btn) => {
@@ -89,6 +97,7 @@ async function render() {
   await populateExerciseSelect();
   renderSets();
   await loadHistory();
+  await renderCustomExercisesManager();
 }
 
 async function populateExerciseSelect(selectName) {
@@ -227,6 +236,77 @@ async function saveWorkout() {
     status.className = "status error";
   } finally {
     saveBtn.disabled = false;
+  }
+}
+
+async function renderCustomExercisesManager() {
+  const el = document.getElementById("customExercisesManager");
+  if (!el) return;
+  let customs;
+  try {
+    customs = await getCustomExercisesWithIds(activeMuscleGroup);
+  } catch (err) {
+    el.innerHTML = `<p class="status error">${escapeHtml(err.message)}</p>`;
+    return;
+  }
+
+  if (!customs.length) {
+    el.innerHTML = `<p class="muted">No custom exercises for ${MUSCLE_GROUP_LABELS[activeMuscleGroup]}.</p>`;
+    return;
+  }
+
+  el.innerHTML = customs
+    .map(
+      (c) => `
+      <div class="history-row" id="custom-ex-${c.id}">
+        <div class="history-detail">${escapeHtml(c.name)}</div>
+        <div class="history-actions">
+          <button class="link-btn rename-ex-btn" data-id="${c.id}" data-name="${escapeHtml(c.name)}" type="button">Rename</button>
+        </div>
+      </div>`
+    )
+    .join("");
+
+  el.querySelectorAll(".rename-ex-btn").forEach((btn) => {
+    btn.addEventListener("click", () => startRename(btn.dataset.id, btn.dataset.name));
+  });
+}
+
+function startRename(id, currentName) {
+  const row = document.getElementById(`custom-ex-${id}`);
+  if (!row) return;
+  row.innerHTML = `
+    <div class="inline-group">
+      <input type="text" id="renameInput-${id}" value="${escapeHtml(currentName)}" />
+      <button class="secondary-btn save-rename-btn" data-id="${id}" type="button">Save</button>
+      <button class="link-btn cancel-rename-btn" type="button">Cancel</button>
+    </div>`;
+  row.querySelector(".save-rename-btn").addEventListener("click", () => handleRename(id, currentName));
+  row.querySelector(".cancel-rename-btn").addEventListener("click", () => renderCustomExercisesManager());
+  document.getElementById(`renameInput-${id}`).focus();
+}
+
+async function handleRename(id, oldName) {
+  const status = document.getElementById("renameStatus");
+  const input = document.getElementById(`renameInput-${id}`);
+  const newName = input ? input.value.trim() : "";
+
+  if (!newName || newName === oldName) {
+    await renderCustomExercisesManager();
+    return;
+  }
+
+  try {
+    await renameCustomExercise(id, oldName, newName, activeMuscleGroup);
+    status.textContent = "Renamed successfully.";
+    status.className = "status success";
+    await populateExerciseSelect(newName);
+    await renderCustomExercisesManager();
+    await loadHistory();
+  } catch (err) {
+    status.textContent = err.message;
+    status.className = "status error";
+    await renderCustomExercisesManager();
   }
 }
 

@@ -31,6 +31,11 @@ async function render() {
     </div>
 
     <div class="card">
+      <h3>Personal Records</h3>
+      <div id="personalRecords"><p class="muted">Loading...</p></div>
+    </div>
+
+    <div class="card">
       <h3>Exercise progress</h3>
       <div class="field">
         <label for="progressMuscleGroup">Muscle group</label>
@@ -80,6 +85,7 @@ async function render() {
   await Promise.all([
     renderSummary("weeklySummary", formatDate(startOfWeek(new Date())), todayStr()),
     renderSummary("monthlySummary", formatDate(startOfMonth(new Date())), todayStr()),
+    renderPersonalRecords(),
     setupProgressChart(),
     renderRunTrends(),
     setupWeightSection(),
@@ -107,8 +113,8 @@ async function renderSummary(elId, start, end) {
     const rows = lifts.filter((r) => r.muscle_group === mg);
     const sessions = new Set(rows.map((r) => r.date)).size;
     const sets = rows.length;
-    const volume = rows.reduce((sum, r) => sum + r.reps * r.weight_kg, 0);
-    return { mg, sessions, sets, volume };
+    const bestWeight = rows.length ? Math.max(...rows.map((r) => r.weight_kg)) : 0;
+    return { mg, sessions, sets, bestWeight };
   });
 
   const runRows = RUN_TYPES.map((type) => {
@@ -127,7 +133,7 @@ async function renderSummary(elId, start, end) {
           (r) => `
         <div class="summary-row">
           <span>${MUSCLE_GROUP_LABELS[r.mg]}</span>
-          <span>${r.sessions} session${r.sessions === 1 ? "" : "s"} · ${r.sets} sets · ${Math.round(r.volume)} kg volume</span>
+          <span>${r.sessions} session${r.sessions === 1 ? "" : "s"} · ${r.sets} sets${r.bestWeight ? ` · top: ${r.bestWeight}kg` : ""}</span>
         </div>`
         )
         .join("")}
@@ -145,6 +151,52 @@ async function renderSummary(elId, start, end) {
         .join("")}
     </div>
   `;
+}
+
+async function renderPersonalRecords() {
+  const el = document.getElementById("personalRecords");
+
+  const { data, error } = await supabase
+    .from("lift_sets")
+    .select("muscle_group, exercise_name, weight_kg");
+
+  if (error) {
+    el.innerHTML = `<p class="status error">${escapeHtml(error.message)}</p>`;
+    return;
+  }
+
+  if (!data.length) {
+    el.innerHTML = `<p class="muted">Log some workouts to see your personal records.</p>`;
+    return;
+  }
+
+  const prMap = new Map();
+  for (const row of data) {
+    if (!prMap.has(row.muscle_group)) prMap.set(row.muscle_group, new Map());
+    const exMap = prMap.get(row.muscle_group);
+    exMap.set(row.exercise_name, Math.max(exMap.get(row.exercise_name) || 0, row.weight_kg));
+  }
+
+  el.innerHTML =
+    MUSCLE_GROUPS.filter((mg) => prMap.has(mg))
+      .map((mg) => {
+        const exMap = prMap.get(mg);
+        const exercises = [...exMap.entries()].sort((a, b) => b[1] - a[1]);
+        return `
+        <div class="summary-section">
+          <h4>${MUSCLE_GROUP_LABELS[mg]}</h4>
+          ${exercises
+            .map(
+              ([ex, w]) => `
+            <div class="summary-row">
+              <span>${escapeHtml(ex)}</span>
+              <span><strong>${w}kg</strong></span>
+            </div>`
+            )
+            .join("")}
+        </div>`;
+      })
+      .join("") || `<p class="muted">No records yet.</p>`;
 }
 
 async function setupProgressChart() {

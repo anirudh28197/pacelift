@@ -1,6 +1,6 @@
 {
-  "name": "Fitness Tracker",
-  "short_name": "Fitness",
+  "name": "Health Hub",
+  "short_name": "Health Hub",
   "description": "Track your lifts and runs, and see your progress.",
   "start_url": "./index.html",
   "scope": "./",

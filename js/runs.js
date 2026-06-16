@@ -4,17 +4,6 @@ import { todayStr, formatDuration, formatPace, escapeHtml } from "./utils.js";
 export const RUN_TYPES = ["speed", "recovery", "long"];
 export const RUN_TYPE_LABELS = { speed: "Speed", recovery: "Recovery", long: "Long" };
 
-// GPS tracking state
-let tracking = false;
-let watchId = null;
-let timerInterval = null;
-let startTime = null;
-let elapsedSeconds = 0;
-let totalDistanceKm = 0;
-let routePoints = [];
-let lastPosition = null;
-
-// Manual form edit state
 let editingRunId = null;
 
 export async function initRunsTab() {
@@ -30,25 +19,7 @@ async function render() {
 
   container.innerHTML = `
     <div class="card">
-      <h3>Track a run</h3>
-      <div class="field">
-        <label for="trackerRunType">Run type</label>
-        <select id="trackerRunType">
-          ${RUN_TYPES.map((t) => `<option value="${t}">${RUN_TYPE_LABELS[t]}</option>`).join("")}
-        </select>
-      </div>
-      <div class="tracker-stats">
-        <div class="tracker-stat"><span class="tracker-value" id="trackerTime">0:00</span><span class="tracker-label">Time</span></div>
-        <div class="tracker-stat"><span class="tracker-value" id="trackerDistance">0.00 km</span><span class="tracker-label">Distance</span></div>
-        <div class="tracker-stat"><span class="tracker-value" id="trackerPace">—</span><span class="tracker-label">Pace</span></div>
-      </div>
-      <button id="trackerBtn" class="primary-btn" type="button">Start GPS Tracking</button>
-      <div class="status" id="trackerStatus"></div>
-      <p class="hint">Keep this tab open and your screen on while tracking — GPS tracking pauses if your phone locks or you switch apps.</p>
-    </div>
-
-    <div class="card">
-      <h3 id="manualFormTitle">Add a run manually</h3>
+      <h3 id="manualFormTitle">Add a run</h3>
       <div class="field">
         <label for="manualDate">Date</label>
         <input type="date" id="manualDate" value="${todayStr()}" />
@@ -85,149 +56,10 @@ async function render() {
     </div>
   `;
 
-  document.getElementById("trackerBtn").addEventListener("click", toggleTracking);
   document.getElementById("manualSaveBtn").addEventListener("click", saveManualRun);
   document.getElementById("manualCancelBtn").addEventListener("click", cancelEdit);
 
-  updateTrackerUI();
   await loadHistory();
-}
-
-function toRad(deg) {
-  return (deg * Math.PI) / 180;
-}
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function toggleTracking() {
-  if (tracking) {
-    stopTracking();
-  } else {
-    startTracking();
-  }
-}
-
-function startTracking() {
-  const status = document.getElementById("trackerStatus");
-
-  if (!("geolocation" in navigator)) {
-    status.textContent = "Geolocation is not supported on this device/browser.";
-    status.className = "status error";
-    return;
-  }
-
-  totalDistanceKm = 0;
-  elapsedSeconds = 0;
-  routePoints = [];
-  lastPosition = null;
-  startTime = Date.now();
-  tracking = true;
-  status.textContent = "Acquiring GPS signal...";
-  status.className = "status";
-
-  document.getElementById("trackerRunType").disabled = true;
-  document.getElementById("trackerBtn").textContent = "Stop & Save";
-
-  watchId = navigator.geolocation.watchPosition(
-    (pos) => {
-      const { latitude, longitude } = pos.coords;
-      routePoints.push({ lat: latitude, lng: longitude, t: Date.now() });
-
-      if (lastPosition) {
-        totalDistanceKm += haversineKm(lastPosition.lat, lastPosition.lng, latitude, longitude);
-      }
-      lastPosition = { lat: latitude, lng: longitude };
-      status.textContent = "Tracking...";
-      status.className = "status success";
-    },
-    (err) => {
-      status.textContent = `Location error: ${err.message}`;
-      status.className = "status error";
-    },
-    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
-  );
-
-  timerInterval = setInterval(() => {
-    elapsedSeconds = (Date.now() - startTime) / 1000;
-    updateTrackerUI();
-  }, 1000);
-
-  updateTrackerUI();
-}
-
-async function stopTracking() {
-  if (watchId !== null) {
-    navigator.geolocation.clearWatch(watchId);
-    watchId = null;
-  }
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-  tracking = false;
-
-  const status = document.getElementById("trackerStatus");
-  document.getElementById("trackerRunType").disabled = false;
-  document.getElementById("trackerBtn").textContent = "Start GPS Tracking";
-
-  if (totalDistanceKm <= 0 || elapsedSeconds < 5) {
-    status.textContent = "Run too short to save — not enough GPS data was recorded.";
-    status.className = "status error";
-    updateTrackerUI();
-    return;
-  }
-
-  const runType = document.getElementById("trackerRunType").value;
-  status.textContent = "Saving run...";
-  status.className = "status";
-
-  try {
-    const userId = await getUserId();
-    const { error } = await supabase.from("runs").insert({
-      user_id: userId,
-      date: todayStr(),
-      run_type: runType,
-      distance_km: Math.round(totalDistanceKm * 1000) / 1000,
-      duration_seconds: Math.round(elapsedSeconds),
-      route: routePoints,
-      source: "gps",
-    });
-    if (error) throw error;
-
-    status.textContent = `Saved! ${totalDistanceKm.toFixed(2)} km in ${formatDuration(elapsedSeconds)}.`;
-    status.className = "status success";
-    await loadHistory();
-  } catch (err) {
-    status.textContent = err.message;
-    status.className = "status error";
-  }
-
-  totalDistanceKm = 0;
-  elapsedSeconds = 0;
-  routePoints = [];
-  updateTrackerUI();
-}
-
-function updateTrackerUI() {
-  const timeEl = document.getElementById("trackerTime");
-  const distEl = document.getElementById("trackerDistance");
-  const paceEl = document.getElementById("trackerPace");
-  if (!timeEl) return;
-
-  const mins = Math.floor(elapsedSeconds / 60);
-  const secs = Math.floor(elapsedSeconds % 60);
-  timeEl.textContent = `${mins}:${String(secs).padStart(2, "0")}`;
-  distEl.textContent = `${totalDistanceKm.toFixed(2)} km`;
-  paceEl.textContent = totalDistanceKm > 0 ? formatPace(elapsedSeconds / totalDistanceKm) : "—";
 }
 
 async function saveManualRun() {
@@ -296,7 +128,7 @@ async function saveManualRun() {
 
 function cancelEdit() {
   editingRunId = null;
-  document.getElementById("manualFormTitle").textContent = "Add a run manually";
+  document.getElementById("manualFormTitle").textContent = "Add a run";
   document.getElementById("manualSaveBtn").textContent = "Save run";
   document.getElementById("manualCancelBtn").classList.add("hidden");
   document.getElementById("manualDate").value = todayStr();
@@ -332,7 +164,7 @@ async function loadHistory() {
 
   const { data, error } = await supabase
     .from("runs")
-    .select("id, date, run_type, distance_km, duration_seconds, source, notes")
+    .select("id, date, run_type, distance_km, duration_seconds, notes")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(30);
@@ -354,7 +186,7 @@ async function loadHistory() {
       const pace = run.distance_km > 0 ? formatPace(run.duration_seconds / run.distance_km) : "—";
       return `
         <div class="history-row">
-          <div class="history-date">${run.date} <span class="badge">${RUN_TYPE_LABELS[run.run_type]}</span> ${run.source === "gps" ? "📍" : ""}</div>
+          <div class="history-date">${run.date} <span class="badge">${RUN_TYPE_LABELS[run.run_type]}</span></div>
           <div class="history-detail">${run.distance_km.toFixed(2)} km · ${formatDuration(run.duration_seconds)} · ${pace}</div>
           ${run.notes ? `<div class="history-detail muted">${escapeHtml(run.notes)}</div>` : ""}
           <div class="history-actions">
