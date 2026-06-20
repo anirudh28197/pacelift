@@ -58,7 +58,9 @@ Respond with ONLY a JSON array of strings, one per tip. No markdown, no preamble
     }
 
     const data = await response.json();
-    const text = data.content?.[0]?.text || "[]";
+    const rawText = data.content?.[0]?.text || "[]";
+    // Models sometimes wrap JSON in a markdown code fence despite instructions not to.
+    const text = rawText.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
 
     let tips;
     try {
