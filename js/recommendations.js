@@ -21,8 +21,10 @@ async function render() {
 
   const listEl = document.getElementById("recoList");
 
+  let lifts, runs, weights;
   try {
-    const recos = await generateRecommendations();
+    ({ lifts, runs, weights } = await fetchTrainingData());
+    const recos = buildRuleBasedRecommendations(lifts, runs, weights);
     if (!recos.length) {
       listEl.innerHTML = `<p class="muted">Log a few workouts and runs to get personalized tips.</p>`;
       return;
@@ -38,13 +40,27 @@ async function render() {
       .join("");
   } catch (err) {
     listEl.innerHTML = `<p class="status error">${escapeHtml(err.message)}</p>`;
+    return;
   }
+
+  // AI coaching is purely additive on top of the rule-based tips above — any
+  // failure here (no API key configured yet, network error, etc.) is caught
+  // and ignored so it can never break the Tips tab.
+  fetchAiCoachTips(lifts, runs, weights)
+    .then((tips) => {
+      if (!tips.length) return;
+      container.insertAdjacentHTML(
+        "beforeend",
+        `<div class="card">
+          <h3>🤖 AI Coach</h3>
+          <div>${tips.map((t) => `<p class="ai-tip">${escapeHtml(t)}</p>`).join("")}</div>
+        </div>`
+      );
+    })
+    .catch(() => {});
 }
 
-async function generateRecommendations() {
-  const today = todayStr();
-  const recos = [];
-
+async function fetchTrainingData() {
   const [liftsRes, runsRes, weightsRes] = await Promise.all([
     supabase.from("lift_sets").select("date, muscle_group, exercise_name, weight_kg, reps"),
     supabase.from("runs").select("date, run_type, distance_km, duration_seconds"),
@@ -55,9 +71,26 @@ async function generateRecommendations() {
   if (runsRes.error) throw runsRes.error;
   if (weightsRes.error) throw weightsRes.error;
 
-  const lifts = liftsRes.data;
-  const runs = runsRes.data;
-  const weights = weightsRes.data;
+  return { lifts: liftsRes.data, runs: runsRes.data, weights: weightsRes.data };
+}
+
+async function fetchAiCoachTips(lifts, runs, weights) {
+  if (!lifts.length && !runs.length) return [];
+
+  const res = await fetch("/.netlify/functions/ai-coach", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ lifts, runs, weights }),
+  });
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  return Array.isArray(data.tips) ? data.tips : [];
+}
+
+function buildRuleBasedRecommendations(lifts, runs, weights) {
+  const today = todayStr();
+  const recos = [];
 
   if (!lifts.length && !runs.length) return [];
 
