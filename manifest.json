@@ -1,6 +1,6 @@
 {
-  "name": "Health Hub",
-  "short_name": "Health Hub",
+  "name": "PaceLift",
+  "short_name": "PaceLift",
   "description": "Track your lifts and runs, and see your progress.",
   "start_url": "./index.html",
   "scope": "./",

@@ -1,4 +1,4 @@
-# Fitness Tracker
+# PaceLift
 
 A personal web app for tracking strength training and runs, with weekly/monthly analytics, BMI trends, and rule-based recommendations. Installable on Android (and iOS) like an app via "Add to Home Screen".
 

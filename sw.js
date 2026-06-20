@@ -1,4 +1,4 @@
-const CACHE_NAME = "health-hub-v2";
+const CACHE_NAME = "pacelift-v1";
 
 const APP_SHELL = [
   "./",
